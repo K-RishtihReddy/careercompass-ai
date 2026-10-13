@@ -12,8 +12,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.stereotype.Component;
 
+import javax.sql.DataSource;
 import java.util.List;
 import java.util.Optional;
 
@@ -27,23 +30,42 @@ public class DataInitializer implements CommandLineRunner {
     private final UserSkillRepository userSkillRepository;
     private final CareerInterestRepository careerInterestRepository;
     private final PasswordEncoder passwordEncoder;
+    private final DataSource dataSource;
 
     public DataInitializer(UserRepository userRepository,
                            SkillRepository skillRepository,
                            UserSkillRepository userSkillRepository,
                            CareerInterestRepository careerInterestRepository,
-                           PasswordEncoder passwordEncoder) {
+                           PasswordEncoder passwordEncoder,
+                           DataSource dataSource) {
         this.userRepository = userRepository;
         this.skillRepository = skillRepository;
         this.userSkillRepository = userSkillRepository;
         this.careerInterestRepository = careerInterestRepository;
         this.passwordEncoder = passwordEncoder;
+        this.dataSource = dataSource;
     }
 
     @Override
     public void run(String... args) {
+        initDatabaseSeed();
         initAdminUser();
         initDemoStudent();
+    }
+
+    private void initDatabaseSeed() {
+        if (skillRepository.count() == 0 && dataSource != null) {
+            logger.info("Database appears unseeded. Auto-populating master skills, jobs, and roadmaps from seed.sql...");
+            try {
+                ResourceDatabasePopulator populator = new ResourceDatabasePopulator();
+                populator.addScript(new ClassPathResource("seed.sql"));
+                populator.setContinueOnError(true);
+                populator.execute(dataSource);
+                logger.info("Database successfully seeded with master data! Total skills: {}", skillRepository.count());
+            } catch (Exception e) {
+                logger.error("Failed to auto-seed database: {}", e.getMessage(), e);
+            }
+        }
     }
 
     private void initAdminUser() {
